@@ -58,4 +58,4 @@ CODING_STYLE_GUIDE.md
 *.md
 
 ws_livox/*
-src/my_terrain_seg/checkpoints/best.pth
+checkpoints/
