@@ -1,0 +1,112 @@
+ONLINE LIDAR DEPLOYMENT GUIDE
+==========================
+
+OPTION 1: ALL-IN-ONE LAUNCH (Recommended)
+----------------------------------------
+cd /home/vincent/ros2_ws
+source .venv/bin/activate
+source install/setup.bash
+
+# Launch everything (LiDAR + AI + Mapping + Visualization)
+ros2 launch launch/real_lidar_deployment.launch.py
+
+# To stop everything (if Ctrl+C doesn't work):
+pkill -f "ros2"
+pkill -f "ply_publisher"
+pkill -f "segmentation_node"
+pkill -f "octomap_node"
+pkill -f "rviz2"
+
+# Verify nothing is running:
+ps aux | grep -E "ros2|ply_publisher|segmentation|octomap|rviz"
+
+
+OPTION 2: COMPONENT-BY-COMPONENT LAUNCH (For Debugging)
+----------------------------------------------------
+If you need to debug specific components, you can start them separately:
+
+Terminal 1 - LiDAR Driver + AI:
+cd /home/vincent/ros2_ws
+source .venv/bin/activate
+source install/setup.bash
+ros2 run livox_ros_driver2 livox_ros_driver2_node &  # LiDAR driver
+ros2 run my_terrain_seg segmentation_node --ros-args -r /cloud_raw:=/livox/lidar_points
+
+Terminal 2 - Mapping Stack:
+cd /home/vincent/ros2_ws
+source .venv/bin/activate
+source install/setup.bash
+# Start transform
+ros2 run tf2_ros static_transform_publisher 0 0 0 0 0 0 map livox_frame &
+# Start Octomap
+ros2 run my_terrain_seg octomap_node --ros-args -r /cloud_raw:=/livox/lidar_points &
+# Start RTAB-Map SLAM
+ros2 launch rtabmap_launch rtabmap.launch.py \
+    args:="-d --Rtabmap/CreateIntermediateNodes true" \
+    frame_id:=livox_frame \
+    cloud_in:=/livox/lidar_points \
+    qos:=2
+
+Terminal 3 - Visualization:
+cd /home/vincent/ros2_ws
+source install/setup.bash
+rviz2
+
+NOTE: This component-by-component launch is ONLY for debugging.
+For normal operation, use OPTION 1 (all-in-one launch) instead!
+
+IMPORTANT TOPICS
+---------------
+Primary Data:
+- /livox/lidar_points     → Raw LiDAR point cloud
+- /cloud_seg              → AI-segmented stairs
+- /cloud_occupied         → Octomap filtered points
+
+Mapping:
+- /rtabmap/grid_map      → 2D occupancy grid
+- /rtabmap/cloud_map     → 3D point cloud map
+- /rtabmap/odom          → Visual odometry
+- /tf_static             → Coordinate transforms
+
+VISUALIZATION SETUP
+------------------
+RViz2 will start automatically with the launch file, but if you need to configure manually:
+
+1. Global Options:
+   - Fixed Frame: "map"
+
+2. Add Displays:
+   - PointCloud2 for "/livox/lidar_points" (raw data)
+   - PointCloud2 for "/cloud_seg" (stairs)
+   - PointCloud2 for "/cloud_occupied" (filtered)
+   - MapCloud for "/rtabmap/cloud_map" (3D map)
+   - Map for "/rtabmap/grid_map" (2D map)
+   - TF for coordinate frames
+
+DATA RECORDING
+-------------
+To save point cloud data while running:
+ros2 run my_terrain_seg cloud_logger --ros-args -p topic:=/cloud_seg -p filename:=live_capture.ply
+
+TROUBLESHOOTING
+--------------
+LiDAR Connection:
+- Check Ethernet connection
+- Verify LiDAR IP (default: 192.168.1.1)
+- Ensure LiDAR is powered and spinning
+- Check "Connection refused" errors → Network settings
+
+AI Segmentation:
+- Verify point cloud format
+- Check GPU availability
+- Monitor segmentation output rate
+
+Mapping:
+- Verify transform tree is complete
+- Check RTAB-Map database creation
+- Monitor loop closure detection
+
+Performance:
+- CPU/GPU usage with 'htop' and 'nvidia-smi'
+- Network bandwidth for LiDAR data
+- Disk space for map storage

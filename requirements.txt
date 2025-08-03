@@ -1,0 +1,25 @@
+# Core Dependencies
+numpy>=1.21.0
+torch>=1.12.0
+open3d>=0.15.0
+
+# ROS2 Dependencies (installed via apt)
+# rclpy
+# sensor-msgs
+# std-msgs
+
+# Scientific Computing
+scipy>=1.7.0
+scikit-learn>=1.0.0
+
+# Visualization (optional)
+matplotlib>=3.5.0
+
+# Point Cloud Processing
+# pcl-python  # Optional, if using PCL
+
+# Data Handling
+pyyaml>=6.0
+
+# Development Tools (optional)
+pytest>=6.0.0

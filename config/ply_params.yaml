@@ -1,0 +1,5 @@
+publish_ply_cloud:
+  ros__parameters:
+    files: ["/home/vincent/ros2_ws/data/ply/9d7980b0375348c88d8fbc1610501002.ply"]
+    rate_hz: 2
+

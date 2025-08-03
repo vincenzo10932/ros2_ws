@@ -1,0 +1,186 @@
+SIMPLIFIED LAUNCH FILE SETUP GUIDE
+===================================
+
+QUICK SETUP FOR EXTERNAL TERMINALS:
+-----------------------------------
+cd /home/vincent/ros2_ws
+source ./setup_ros2.sh
+
+# This script automatically:
+# - Sources ROS2 Humble environment
+# - Sources workspace environment  
+# - Verifies my_terrain_seg package availability
+# - Shows available commands
+
+BUILD COMMANDS (if needed):
+---------------------------
+colcon build --packages-select my_terrain_seg && source install/setup.bash
+
+source /opt/ros/humble/setup.bash && colcon build
+
+rm -rf build/ install/ log/ && source /opt/ros/humble/setup.bash && colcon build
+
+TERMINAL 1 - Complete Pipeline (Single Launch)
+----------------------------------------------
+cd /home/vincent/ros2_ws
+source ./setup_ros2.sh
+
+# Run complete PLY testing pipeline with Stair_1.ply (override default)
+ros2 launch my_terrain_seg configurable_ply_test.launch.py ply_file:=/home/vincent/ros2_ws/data/ply/Stair_1.ply
+
+# Use different PLY files:
+# ros2 launch my_terrain_seg configurable_ply_test.launch.py ply_file:=/home/vincent/ros2_ws/data/ply/stair2_merged.ply
+# ros2 launch my_terrain_seg configurable_ply_test.launch.py ply_file:=/home/vincent/ros2_ws/data/ply/RoomData.ply
+
+# YOUR AI MODEL DETAILS:
+# - Architecture: RandLA-Net (Point Cloud Segmentation)
+# - Model File: /home/vincent/ros2_ws/src/my_terrain_seg/checkpoints/best.pth
+# - Classes: 3 classes {0: Background, 1: Riser, 2: Tread}
+# - Layers: 6 layers [8, 64, 128, 256, 512, 512] channels
+# - Features: Dilated Residual Blocks + Attentive Pooling
+# - Input: 16,384 points max per inference
+# - Performance: Filters 75% of points (14,367 → 3,592 stairs)
+
+# EXPLANATION: "filtering for occupancy" means:
+# - Real OctoMap Node takes /cloud_seg (3,592 AI-filtered stair points)
+# - Categorizes them: ~3,279 risers + ~313 treads = 3,592 occupied points  
+# - Publishes as /cloud_occupied for 3D mapping
+# - Creates 3D octree structure for occupancy mapping
+
+# Test just PLY publisher:
+# ros2 run my_terrain_seg ply_publisher --ros-args -p ply_file:=/home/vincent/ros2_ws/data/ply/Stair_1.ply
+
+
+TERMINAL 2 - Visualization
+-------------------------------------------
+cd /home/vincent/ros2_ws
+source ./setup_ros2.sh
+
+# Run RViz2 (clean system environment)
+rviz2
+
+# IN RVIZ2 - MANUAL SETUP (ALL CLOUD TOPICS WORK):
+# 1. Set Fixed Frame to "map" (in Global Options)
+# 2. Add Display -> PointCloud2, Topic: "/cloud_raw" (original PLY: 14,367 points)
+#    → Change Color Transformer to "Flat Color" → Set Color to RED for raw data
+# 3. Add Display -> PointCloud2, Topic: "/cloud_stairs" (stairs-only: 14,367 points)  
+#    → Set Color Transformer to "Flat Color" → Set Color to YELLOW for stairs-only data
+# 4. Add Display -> PointCloud2, Topic: "/cloud_seg" (AI-segmented: 3,592 points)
+#    → **IMPORTANT**: Set Color Transformer to "RGB8" or "Intensity" for CLASS COLORS!
+#    → This should show DIFFERENT COLORS for Risers vs Treads automatically!
+#    → If still blue, try "AxisColor" → X, Y, or Z axis
+#    → Risers (class 1) and Treads (class 2) should appear as different colors
+# 5. Add Display -> PointCloud2, Topic: "/cloud_occupied" (occupancy-filtered: 3,592 points)
+#    → Set Color Transformer to "RGB8" for class-based coloring (same as /cloud_seg)
+# 6. Add Display -> PointCloud2, Topic: "/octomap_point_cloud_centers" (octree centers)
+#    → Set Color Transformer to "Flat Color" → Set Color to PURPLE for octree centers
+# 7. Add Display -> MarkerArray, Topic: "/occupied_cells_vis_array" (occupied voxels)
+# 8. Add Display -> MarkerArray, Topic: "/free_cells_vis_array" (free space voxels)
+# 9. Add Display -> OccupancyGrid, Topic: "/projected_map" (2D projection)
+# 10. Increase Point Size to 3-5 for better visibility
+# 11. Enable/disable displays to compare: RAW(red) vs AI-SEGMENTED(class colors) vs FINAL(blue)
+
+# CLASS-BASED COLORING FOR /cloud_seg:
+# - Your RandLA-Net outputs: {0: Background, 1: Riser, 2: Tread}
+# - /cloud_seg should show Risers and Treads in DIFFERENT colors
+# 
+# **EXACT STEPS FOR COLOR VISUALIZATION:**
+# 1. Add PointCloud2 display for "/cloud_seg" 
+# 2. Set Color Transformer to: "label" 
+# 3. If "label" not available, use "Intensity" (it maps to the label field)
+# 4. You should see ~3,279 Riser points and ~313 Tread points in different colors!
+# 
+# **BACKUP OPTIONS IF ABOVE DOESN'T WORK:**
+# - Try "AxisColor" with Z axis (sometimes reveals class differences)
+# - If still all blue, your segmentation node publishes label field correctly
+# - The issue might be RViz color mapping - try adjusting min/max values
+
+# TIP: Enable/disable different point clouds to see the data processing pipeline:
+# - /cloud_raw (RED) shows original PLY data  
+# - /cloud_seg (CLASS COLORS via "label" field) shows Risers vs Treads from your AI model
+# - /cloud_occupied (CLASS COLORS) shows final points used for mapping
+
+
+WHAT THE LAUNCH FILE INCLUDES:
+------------------------------
+✅ PLY Publisher (loads Stair_1.ply, publishes to /cloud_raw)
+✅ Segmentation Node (AI processing, publishes to /cloud_seg)  
+✅ TF Publishers (map → base_link → livox_frame)
+✅ OctoMap Server (3D mapping with full occupancy + free space visualization)
+
+TOPICS TO CHECK:
+- /cloud_raw (from PLY publisher, original PLY data in livox_frame)
+- /cloud_stairs (from PLY publisher, stairs-only data)
+- /cloud_seg (from segmentation node, AI-processed stairs)
+- /cloud_occupied (from real_octomap_node, filtered for occupancy)
+- /octomap_point_cloud_centers (from octomap_server, octree centers)
+- /occupied_cells_vis_array (MarkerArray - occupied space)
+- /free_cells_vis_array (MarkerArray - free space) 
+- /octomap_binary (binary octomap)
+- /octomap_full (full probability octomap)
+- /projected_map (2D occupancy grid projection)
+- /tf_static (should show map→base_link→livox_frame)
+
+AVAILABLE PLY FILES:
+-------------------
+- Stair_1.ply (recommended, 14,367 points)
+- stair1_merged.ply, stair2_merged.ply, stair3_merged.ply
+- PointCloud0.ply
+- RoomData.ply  
+- ep020_sample0.ply
+
+Examples:
+# Different stair datasets:
+ros2 launch my_terrain_seg configurable_ply_test.launch.py ply_file:=/home/vincent/ros2_ws/data/ply/stair2_merged.ply
+ros2 launch my_terrain_seg configurable_ply_test.launch.py ply_file:=/home/vincent/ros2_ws/data/ply/RoomData.ply
+
+FRAMES TO CHECK:
+- map (fixed frame for visualization)
+- base_link (robot base frame)
+- livox_frame (sensor frame where point clouds originate)
+
+ALTERNATIVE: HARDWARE DEPLOYMENT
+---------------------------------
+# For live LiDAR hardware instead of PLY files:
+ros2 launch my_terrain_seg real_lidar_deployment.launch.py
+
+STOPPING THE SYSTEM:
+-------------------
+# To stop the launch file:
+Ctrl+C in Terminal 1
+
+# To kill any remaining processes:
+pkill -f "ros2"
+
+# Verify nothing is running:
+ps aux | grep ros2
+
+ENVIRONMENT SETUP NOTES:
+------------------------
+✅ NEW: setup_ros2.sh script handles all environment configuration
+✅ Works consistently in VS Code and external terminals
+✅ Automatically checks for ROS2 Humble and workspace setup
+✅ Verifies my_terrain_seg package is available
+✅ No more manual sourcing needed - just run: source ./setup_ros2.sh
+
+TROUBLESHOOTING:
+---------------
+- If "Command produced no output": Check that setup_ros2.sh was run first
+- If package not found: Run colcon build --packages-select my_terrain_seg
+- If ROS2 not found: Ensure ROS2 Humble is installed at /opt/ros/humble/
+- Environment issues: Use setup_ros2.sh instead of manual sourcing
+
+CLOUD TOPICS TROUBLESHOOTING:
+-----------------------------
+- If /cloud_raw missing: PLY publisher not running, check PLY file path exists
+- If /cloud_seg missing: Segmentation node failed, check if it's processing /cloud_raw
+- If /cloud_occupied missing: Real octomap node not running properly
+- If no octomap topics: OctoMap server not receiving /cloud_occupied data
+
+Check topics: ros2 topic list | grep cloud
+Check data flow: ros2 topic echo /cloud_raw --once
+Monitor pipeline: ros2 topic hz /cloud_raw
+
+Fix PLY file errors:
+# Make sure to specify correct PLY file path:
+ros2 launch my_terrain_seg configurable_ply_test.launch.py ply_file:=/home/vincent/ros2_ws/data/ply/Stair_1.ply
