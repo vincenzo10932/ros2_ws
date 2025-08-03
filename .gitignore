@@ -18,7 +18,10 @@ data/ply/*.ply
 !data/ply/Stair_1.ply
 
 # Model Checkpoints - Large files, consider Git LFS
-checkpoints/*.pth
+**/*.pth
+*.pth
+checkpoints/
+src/my_terrain_seg/checkpoints/
 # Exception: Add download instructions in README instead
 
 # Log Files (DON'T UPLOAD)
@@ -43,19 +46,5 @@ simple_debug.py
 test_*.py
 realistic_analysis.py
 
-# Documentation and References (DEFINITELY UPLOAD)
-# These files are important for academic credibility:
-# README.md
-# REFERENCES.md  
-# LICENSE
-# CODING_STYLE_GUIDE.md
-# CODE_IMPROVEMENTS_SUMMARY.md
-
-# Documentation (DEFINITELY UPLOAD)
-README.md
-CODE_CITATIONS.md
-CODING_STYLE_GUIDE.md
-*.md
-
-ws_livox/*
-checkpoints/
+# Large directories and files
+ws_livox/
